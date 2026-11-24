@@ -1,0 +1,37 @@
+#!/bin/sh
+# POSIX 薄启动器：解析绝对 uv 路径并以 PEP 723 托管 Python 运行 nlm.py
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/notebooklm-t3"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+
+resolve_uv() {
+  if [ -r "$CONFIG_FILE" ]; then
+    cfg_uv="$(sed -n 's/.*"uv_bin"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG_FILE" | head -n 1)"
+    if [ -n "$cfg_uv" ] && [ -x "$cfg_uv" ]; then
+      printf '%s\n' "$cfg_uv"
+      return 0
+    fi
+  fi
+  if command -v uv >/dev/null 2>&1; then
+    command -v uv
+    return 0
+  fi
+  for cand in "$HOME/.local/bin/uv" "/opt/homebrew/bin/uv" "/usr/local/bin/uv"; do
+    if [ -x "$cand" ]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+UV_BIN="$(resolve_uv || true)"
+if [ -z "$UV_BIN" ]; then
+  echo "ERROR: 'uv' not found in config, PATH, ~/.local/bin, or /opt/homebrew/bin." >&2
+  echo "Install uv first: https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 127
+fi
+
+exec "$UV_BIN" run --no-project --script "$SCRIPT_DIR/nlm.py" "$@"

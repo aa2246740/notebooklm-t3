@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run offline sandbox, WAL fault-injection, guardrail, and renderer tests
+        run: |
+          uv run --no-project --python ">=3.10" -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Verify generated macOS launchd plist with plutil
+        if: runner.os == 'macOS'
+        run: |
+          uv run --no-project --python ">=3.10" tests/verify_service_files.py --platform macos
+
+      - name: Verify generated Linux systemd units with systemd-analyze
+        if: runner.os == 'Linux'
+        run: |
+          uv run --no-project --python ">=3.10" tests/verify_service_files.py --platform linux
