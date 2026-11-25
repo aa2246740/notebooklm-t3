@@ -147,6 +147,83 @@ class TestRenderers(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self._assert_js_valid(mm_html)
+        html_text = mm_html.read_text(encoding="utf-8")
+        # 静态渐进增强大纲存在，无外链资源、无 innerHTML 拼接、无 localStorage、体积可控
+        self.assertIn('class="static-outline"', html_text)
+        cleaned = html_text.replace("http://www.w3.org/2000/svg", "")
+        self.assertIsNone(re.search(r'(?:src|href)\s*=\s*["\']https?://', cleaned, re.IGNORECASE))
+        self.assertIsNone(re.search(r"@import\s+url\([^)]*https?://", cleaned, re.IGNORECASE))
+        scripts = _extract_inline_scripts(html_text)
+        for js in scripts:
+            self.assertNotIn("innerHTML", js)
+            self.assertNotIn("localStorage", js)
+        self.assertLess(len(html_text.encode("utf-8")), 90000)
+
+    def test_mind_map_layout_zero_overlap_on_large_tree(self) -> None:
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not installed")
+        # 构造 4 层 64 节点可变尺寸树（模拟真实公开课导图分布），运行纯布局函数断言零重叠
+        branches = []
+        for b in range(5):
+            l2_list = []
+            for m in range(3):
+                leaves = [{"name": f"Leaf {b}-{m}-{k}: detailed explanation text"} for k in range(3)]
+                l2_list.append({"name": f"Subtopic {b}-{m}", "children": leaves})
+            branches.append({"name": f"Main Branch {b}", "children": l2_list})
+        big_json = self.out_dir / "big_mm.json"
+        big_html = self.out_dir / "big_mm.html"
+        big_json.write_text(json.dumps({"name": "Root Topic Overview", "children": branches}), encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "render_mind_map.py"), str(big_json), str(big_html)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        html_text = big_html.read_text(encoding="utf-8")
+        self.assertLess(len(html_text.encode("utf-8")), 90000)
+        js_code = _extract_inline_scripts(html_text)[0]
+        harness = self.out_dir / "layout_check.js"
+        harness.write_text(
+            js_code
+            + """
+let sid = 0;
+function ann(raw, d) {
+  const n = { id: 't' + (sid++), name: raw.name, depth: d, children: [] };
+  n.children = (raw.children || []).map(c => ann(c, d + 1));
+  return n;
+}
+const root = ann(TREE, 0);
+const sizeMap = new Map();
+function walkSize(n) {
+  const w = Math.min(240, Math.max(80, n.name.length * 7));
+  const h = n.name.length > 30 ? 58 : 38;
+  sizeMap.set(n.id, { w, h });
+  n.children.forEach(walkSize);
+}
+walkSize(root);
+const res = computeMindMapLayout(root, () => false, sizeMap, { gapX: 56, gapY: 10, subtreeGapY: 16 });
+const rects = Array.from(res.placed.values());
+if (rects.length !== sid) { console.error('Missing nodes'); process.exit(2); }
+for (let i = 0; i < rects.length; i++) {
+  for (let j = i + 1; j < rects.length; j++) {
+    const a = rects[i], b = rects[j];
+    const overlapX = a.x < b.x + b.w && a.x + a.w > b.x;
+    const overlapY = a.y < b.y + b.h && a.y + a.h > b.y;
+    if (overlapX && overlapY) {
+      console.error('Overlap detected:', a.id, b.id, a, b);
+      process.exit(3);
+    }
+  }
+}
+console.log('OK_NO_OVERLAP', rects.length);
+""",
+            encoding="utf-8",
+        )
+        run_node = subprocess.run([node, str(harness)], capture_output=True, text=True, check=False)
+        self.assertEqual(run_node.returncode, 0, run_node.stdout + run_node.stderr)
+        self.assertIn("OK_NO_OVERLAP", run_node.stdout)
 
     def test_slide_deck_emits_static_img_tags(self) -> None:
         slides = self.out_dir / "slides"
