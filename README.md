@@ -8,7 +8,7 @@ You do not need Gemini to use this kit. NotebookLM synthesis runs on Google's se
 
 ## Launch Video
 
-[![Watch notebooklm-t3 launch video (English, 1080p)](./media/launch-video-poster-en.jpg)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-en.mp4)
+https://github.com/user-attachments/assets/e133727b-63fa-4464-a239-00203e157275
 
 - [Download English Launch Video (1080p MP4)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-en.mp4)
 - [Download Chinese Launch Video (1080p MP4)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-zh.mp4)

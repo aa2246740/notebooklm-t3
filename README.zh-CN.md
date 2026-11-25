@@ -8,7 +8,7 @@
 
 ## 实机宣传视频
 
-[![观看 notebooklm-t3 实机宣传视频（中文版，1080p）](./media/launch-video-poster-zh.jpg)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-zh.mp4)
+https://github.com/user-attachments/assets/b07ea83e-6c5a-4950-9957-4bfc590cd18c
 
 - [下载中文版宣传视频（1080p MP4）](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-zh.mp4)
 - [下载英文版宣传视频（1080p MP4）](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-en.mp4)
