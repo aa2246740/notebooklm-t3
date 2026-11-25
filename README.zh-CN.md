@@ -4,14 +4,21 @@
 
 面向 T3 Code 全平台（**Antigravity、Claude Code、Codex、Grok、Cursor、Pi**）的 Google NotebookLM 自主决策技能套件，包含非交互防呆 CLI 包装器、WAL 指纹安装卸载器、20 分钟后台保活与 3 套确定性 T3 交互可视化渲染器。
 
-使用本套件不绑定 Gemini 模型。NotebookLM 的音频、PPT、信息图、测验与调研全部运行在 Google 服务端，你在 T3 Code 里使用任意模型都能独立编排完整流程，并直接在对话中翻页看 PPT、听双人播客、点选 4 题型测验、翻看闪卡和搜索思维导图。
+使用本套件不绑定 Gemini 模型。NotebookLM 的音频、PPT、信息图、测验与调研全部运行在 Google 服务端，你在 T3 Code 里使用任意模型都能独立编排完整流程，并直接在对话中翻页看 PPT、听双人播客、点选 4 题型测验、翻看闪卡，以及在横向交互思维导图画布上平滑展开分支、路径聚光高亮、关键词检索与导出 2x PNG。
+
+## 实机宣传视频
+
+[![观看 notebooklm-t3 实机宣传视频（中文版，1080p）](./media/launch-video-poster-zh.jpg)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-zh.mp4)
+
+- [下载中文版宣传视频（1080p MP4）](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-zh.mp4)
+- [下载英文版宣传视频（1080p MP4）](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-en.mp4)
 
 ## 快速上手（Agent-First，普通用户推荐）
 
 大多数 T3 Code 用户不需要自己敲终端命令。在 T3 Code 中打开任意 Agent（Antigravity、Claude、Codex、Grok、Cursor 或 Pi），直接粘贴下面这一句话（绑定固定发布 tag，绝不用 `curl | sh`）：
 
 ```text
-请帮我按 https://github.com/aa2246740/notebooklm-t3/blob/v0.1.0/docs/INSTALL_FOR_AGENTS.md 的步骤，下载校验 v0.1.0 发布包并安装配置 notebooklm-t3。
+请帮我按 https://github.com/aa2246740/notebooklm-t3/blob/v0.1.1/docs/INSTALL_FOR_AGENTS.md 的步骤，下载校验 v0.1.1 发布包并安装配置 notebooklm-t3。
 ```
 
 Agent 会自动完成：在 `$TMPDIR` 下载并执行 SHA-256 校验 -> 只读探测环境（邮箱脱敏）-> 输出完整 `--plan` 变更清单并在写入 `$HOME` 前预检沙盒权限 -> 一次性请你确认工作区目录、浏览器 Profile 和保活选项 -> 执行落盘、前台绑定账号和 `--doctor` 体检 -> 提醒你新开一条线程。
@@ -34,7 +41,7 @@ Agent 会自动完成：在 `$TMPDIR` 下载并执行 SHA-256 校验 -> 只读�
 ./install.sh --doctor --json
 
 # 从校验后的指定 Release Tag 升级
-./install.sh --update --tag v0.1.0
+./install.sh --update --tag v0.1.1
 
 # 基于 WAL Manifest 指纹校验的无损卸载
 ./uninstall.sh

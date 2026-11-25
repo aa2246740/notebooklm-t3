@@ -10,10 +10,10 @@ This runbook is written for AI coding agents (Antigravity, Claude Code, Codex, G
 
 ## Step 1: Download and Verify Release Tarball in `$TMPDIR` (Zero `$HOME` Writes)
 
-Use the exact pinned release tag requested by the user (for example `TAG=v0.1.0`):
+Use the exact pinned release tag requested by the user (for example `TAG=v0.1.1`):
 
 ```sh
-TAG="v0.1.0"
+TAG="v0.1.1"
 WORK="${TMPDIR:-/tmp}/notebooklm-t3-${TAG}"
 rm -rf "$WORK" && mkdir -p "$WORK"
 cd "$WORK"

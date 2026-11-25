@@ -4,14 +4,21 @@
 
 Autonomous Google NotebookLM skill, non-interactive safety CLI wrapper, WAL-manifest installer, and interactive T3 Code visualizers across **Antigravity, Claude Code, Codex, Grok, Cursor, and Pi**.
 
-You do not need Gemini to use this kit. NotebookLM synthesis runs on Google's servers; any T3 Code provider can orchestrate YouTube transcripts, multi-source cited Q&A, Web/Deep Research, Audio Overviews, Slide Decks (PDF + editable PPTX + inline slide viewer), Infographics, Mind Maps, Quizzes, and Flashcards automatically.
+You do not need Gemini to use this kit. NotebookLM synthesis runs on Google's servers; any T3 Code provider can orchestrate YouTube transcripts, multi-source cited Q&A, Web/Deep Research, Audio Overviews, Slide Decks (PDF + editable PPTX + inline slide viewer), Infographics, interactive horizontal Mind Maps (with smooth branch expansion, path spotlight, keyword search, and 2x PNG export), Quizzes, and Flashcards automatically.
+
+## Launch Video
+
+[![Watch notebooklm-t3 launch video (English, 1080p)](./media/launch-video-poster-en.jpg)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-en.mp4)
+
+- [Download English Launch Video (1080p MP4)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-en.mp4)
+- [Download Chinese Launch Video (1080p MP4)](https://github.com/aa2246740/notebooklm-t3/releases/download/v0.1.1/notebooklm-t3-launch-zh.mp4)
 
 ## Quick Start (Agent-First, Recommended)
 
 Most T3 Code users never need to run terminal setup commands manually. Open any agent in T3 Code (Antigravity, Claude, Codex, Grok, Cursor, or Pi) and paste this single instruction (pinned to a release tag — never `curl | sh`):
 
 ```text
-Please install and configure notebooklm-t3 by following https://github.com/aa2246740/notebooklm-t3/blob/v0.1.0/docs/INSTALL_FOR_AGENTS.md using release tag v0.1.0.
+Please install and configure notebooklm-t3 by following https://github.com/aa2246740/notebooklm-t3/blob/v0.1.1/docs/INSTALL_FOR_AGENTS.md using release tag v0.1.1.
 ```
 
 Your agent will download and SHA-256 verify the release tarball in `$TMPDIR`, probe your environment read-only, show you the exact `--plan` before touching `$HOME`, ask once for confirmation (workspace root, browser profile, keepalive), bind your NotebookLM account safely, run `--doctor`, and remind you to open a new thread.
@@ -34,7 +41,7 @@ Prerequisite: [`uv`](https://docs.astral.sh/uv/getting-started/installation/) on
 ./install.sh --doctor --json
 
 # Update from a verified release tag
-./install.sh --update --tag v0.1.0
+./install.sh --update --tag v0.1.1
 
 # Clean fingerprint-verified uninstall
 ./uninstall.sh
