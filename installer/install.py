@@ -54,6 +54,7 @@ from _common import (  # noqa: E402
     get_data_dir,
     get_home,
     get_manifest_path,
+    get_master_token_path,
     get_state_dir,
     is_supported_engine_version,
     load_config,
@@ -171,9 +172,10 @@ def _detect_engine(uv_info: dict[str, Any]) -> dict[str, Any]:
         except (OSError, subprocess.SubprocessError):
             pass
 
-    # 在引擎专属 uv tool Python 环境中检查 socksio（不在 installer 自身解释器里查）
+    # 在引擎专属 uv tool Python 环境中检查 socksio 与 gpsoauth（不在 installer 自身解释器里查）
     engine_python: Path | None = None
     has_socksio: bool | None = None
+    has_gpsoauth: bool | None = None
     if tool_dir:
         cand_py = tool_dir / "notebooklm-py" / "bin" / "python"
         if cand_py.is_file() and os.access(cand_py, os.X_OK):
@@ -200,6 +202,17 @@ def _detect_engine(uv_info: dict[str, Any]) -> dict[str, Any]:
             has_socksio = p.returncode == 0
         except (OSError, subprocess.SubprocessError):
             has_socksio = False
+        try:
+            p_gp = subprocess.run(
+                [str(engine_python), "-c", "import gpsoauth"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            has_gpsoauth = p_gp.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            has_gpsoauth = False
 
     return {
         "installed": nlm_bin is not None,
@@ -210,6 +223,7 @@ def _detect_engine(uv_info: dict[str, Any]) -> dict[str, Any]:
         "version_semver": ".".join(str(x) for x in version_tuple) if version_tuple else None,
         "version_supported": is_supported_engine_version(version_tuple),
         "has_socksio": has_socksio,
+        "has_gpsoauth": has_gpsoauth,
         "missing_extras": ["socksio"] if (nlm_bin is not None and has_socksio is False) else [],
     }
 
@@ -659,6 +673,9 @@ def _build_plan(args: argparse.Namespace) -> dict[str, Any]:
             warnings.append(
                 "Existing external notebooklm-py venv is missing optional 'socksio' (only required for SOCKS5 proxies; pass --force-engine to add it)."
             )
+    elif args.force_engine:
+        engine_action = "force_reinstall"
+        engine_installed_by_us = False
 
     # 规划目标写路径用于沙盒预检（B6）
     check_write_paths: list[Path] = [
@@ -1530,6 +1547,11 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         warnings.append("macOS PAC auto-proxy detected; Python getproxies() cannot evaluate PAC scripts. Set explicit proxy in config.json if needed.")
     if proxy_meta["has_socks"] and engine["has_socksio"] is False:
         issues.append("SOCKS proxy is active but engine venv is missing 'socksio' (re-run installer with --force-engine).")
+    if engine["installed"] and engine.get("has_gpsoauth") is False:
+        warnings.append(
+            "Engine venv is missing optional 'gpsoauth' (headless extra); re-run installer with --force-engine "
+            "to enable sleep-proof 'nlm setup-auth master-token' refresh."
+        )
 
     connectivity = (
         {"reachable": None, "checked_via": "skipped_offline"}
@@ -1557,9 +1579,10 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     if missing_agy_mcp:
         warnings.append(f"Antigravity instance(s) missing mcpServers.notebooklm: {missing_agy_mcp}")
 
+    profile = str(cfg.get("profile") or DEFAULT_PROFILE)
+    master_token_present = get_master_token_path(profile).is_file()
     auth_live_ok: bool | None = None
     if not args.offline and engine["nlm_bin"]:
-        profile = str(cfg.get("profile") or DEFAULT_PROFILE)
         chk_env = dict(env)
         chk_env["NOTEBOOKLM_DISABLE_KEEPALIVE_POKE"] = "1"
         try:
@@ -1591,6 +1614,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         "connectivity": connectivity,
         "auth_status": read_auth_status(),
         "auth_live_ok": auth_live_ok,
+        "master_token_present": master_token_present,
         "canonical_skill_exists": canonical.exists(),
         "missing_antigravity_skills": missing_agy_skills,
         "missing_antigravity_mcp": missing_agy_mcp,

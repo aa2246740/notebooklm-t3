@@ -10,10 +10,10 @@ This runbook is written for AI coding agents (Antigravity, Claude Code, Codex, G
 
 ## Step 1: Download and Verify Release Tarball in `$TMPDIR` (Zero `$HOME` Writes)
 
-Use the exact pinned release tag requested by the user (for example `TAG=v0.1.1`):
+Use the exact pinned release tag requested by the user (for example `TAG=v0.1.2`):
 
 ```sh
-TAG="v0.1.1"
+TAG="v0.1.2"
 WORK="${TMPDIR:-/tmp}/notebooklm-t3-${TAG}"
 rm -rf "$WORK" && mkdir -p "$WORK"
 cd "$WORK"
@@ -99,7 +99,8 @@ Follow the user's browser environment:
      ~/.agents/skills/notebooklm-t3/scripts/nlm setup-auth apply --index 0 --json
      # Add --confirm-overwrite ONLY after explicit user confirmation
      ```
-- **Safari only**: reading Safari cookies requires Full Disk Access. Recommend signing in via Chrome or running foreground Playwright login (`notebooklm login --browser chrome`, as a background task with 300s timeout; ensure network reaches Google first before downloading ~150MB bundled Chromium).
+- **Sleep-proof durable auth (Recommended)**: after binding or whenever short-lived sessions expire after Mac sleep, run foreground `~/.agents/skills/notebooklm-t3/scripts/nlm setup-auth master-token` once (uses system Google Chrome via `--browser chrome`, writes `0600` `master_token.json`; subsequent `keepalive` and `nlm recover` re-mint fresh cookies silently with zero browser or Keychain prompts).
+- **Safari only / Direct browser login**: reading Safari cookies requires Full Disk Access. Recommend signing in via `nlm setup-auth master-token` or foreground `~/.agents/skills/notebooklm-t3/scripts/nlm login --browser chrome` (always pass `--browser chrome` on machines with Chrome so Playwright never downloads ~600MB bundled Chromium).
 - **Headless / Linux server / WSL without desktop browser**: guide the user to export cookies on another machine and import via `notebooklm auth import-cookies`.
 
 ## Step 6: Health Check and New-Session Handoff

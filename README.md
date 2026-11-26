@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/e133727b-63fa-4464-a239-00203e157275
 Most T3 Code users never need to run terminal setup commands manually. Open any agent in T3 Code (Antigravity, Claude, Codex, Grok, Cursor, or Pi) and paste this single instruction (pinned to a release tag — never `curl | sh`):
 
 ```text
-Please install and configure notebooklm-t3 by following https://github.com/aa2246740/notebooklm-t3/blob/v0.1.1/docs/INSTALL_FOR_AGENTS.md using release tag v0.1.1.
+Please install and configure notebooklm-t3 by following https://github.com/aa2246740/notebooklm-t3/blob/v0.1.2/docs/INSTALL_FOR_AGENTS.md using release tag v0.1.2.
 ```
 
 Your agent will download and SHA-256 verify the release tarball in `$TMPDIR`, probe your environment read-only, show you the exact `--plan` before touching `$HOME`, ask once for confirmation (workspace root, browser profile, keepalive), bind your NotebookLM account safely, run `--doctor`, and remind you to open a new thread.
@@ -41,7 +41,7 @@ Prerequisite: [`uv`](https://docs.astral.sh/uv/getting-started/installation/) on
 ./install.sh --doctor --json
 
 # Update from a verified release tag
-./install.sh --update --tag v0.1.1
+./install.sh --update --tag v0.1.2
 
 # Clean fingerprint-verified uninstall
 ./uninstall.sh
@@ -53,7 +53,7 @@ Every mutation is recorded first in a write-ahead manifest (`~/.config/notebookl
 
 | Component | Installed / Modified by `install.sh` | Behavior on `uninstall.sh` |
 |---|---|---|
-| Engine (`notebooklm-py`) | `uv tool install --with socksio "notebooklm-py[browser,mcp,markdown,impersonate,cookies]>=0.8.6,<0.9"` (if absent or `--force-engine`) | Preserved by default; uninstalled only if installed by this tool AND `--uninstall-engine` is passed. `uv` is never uninstalled. |
+| Engine (`notebooklm-py`) | `uv tool install --with socksio "notebooklm-py[browser,mcp,markdown,impersonate,cookies,headless]>=0.8.6,<0.9"` (if absent or `--force-engine`) | Preserved by default; uninstalled only if installed by this tool AND `--uninstall-engine` is passed. `uv` is never uninstalled. |
 | Canonical Skill | Copied to `~/.agents/skills/notebooklm-t3` with `.notebooklm-t3-managed.json` marker | Removed only if managed marker is present. |
 | Source Cache | Copied to `~/.local/share/notebooklm-t3/src` (used for `--update`) | Removed only if managed marker is present. |
 | Provider Symlinks | Linked into detected existing providers (`~/.t3/userdata/providers/antigravity/*/config/skills`, enabled `claudeAgent` `homePath/skills`, `~/.codex/skills`, `~/.grok/skills`, `~/.pi/agent/skills`, optional `~/.gemini/config/skills`), deduped by `realpath` | Removed only if current `readlink()` matches exact recorded target; user-modified symlinks are preserved and reported. |
@@ -66,8 +66,9 @@ Every mutation is recorded first in a write-ahead manifest (`~/.config/notebookl
 
 | Environment | Recommended Onboarding Path |
 |---|---|
+| Sleep-proof durable auth (Recommended) | Foreground `nlm setup-auth master-token` (uses system Google Chrome via `--browser chrome` for one sign-in, stores `0600` `master_token.json`; `keepalive` and `nlm recover` then mint fresh cookies silently even after overnight Mac sleep, with zero browser or Keychain popups). |
 | Chrome / Brave / Edge already signed in | Foreground `nlm setup-auth inspect --browser "chrome::<dir>" --json` (masked emails) -> `nlm setup-auth apply --index <k>` (binds real `account_email`; warns about macOS Keychain "Always Allow"). |
-| Safari only | Reading Safari cookies requires Full Disk Access. Sign in via Chrome or run foreground Playwright login (`notebooklm login --browser chrome`, 300s timeout; verify Google connectivity before downloading ~150MB Chromium). |
+| Safari only / Direct browser login | Reading Safari cookies requires Full Disk Access. Sign in via `nlm setup-auth master-token` or foreground `nlm login --browser chrome` (automatically reuses system Chrome/Edge instead of downloading ~600MB bundled Playwright Chromium). |
 | Headless Linux / WSL (no browser) | Export cookies from a signed-in machine and import via `notebooklm auth import-cookies`. |
 | Linux `systemd --user` keepalive | Run `loginctl enable-linger "$USER"` if you want the 20-minute timer to run while logged out. (WSL typically lacks `systemd` by default.) |
 | Windows native | Explicitly unsupported in v1 due to Chrome App-Bound Encryption blocking local cookie decryption. |

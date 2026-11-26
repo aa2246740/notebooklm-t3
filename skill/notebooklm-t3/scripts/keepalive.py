@@ -29,6 +29,7 @@ from _common import (  # noqa: E402
     KEEPALIVE_LOG_MAX_LINES,
     build_proxy_env,
     get_keepalive_log_path,
+    get_master_token_path,
     load_config,
     resolve_nlm_bin,
     utc_now_iso,
@@ -79,11 +80,12 @@ def main(argv: list[str] | None = None) -> int:
     profile = str(cfg.get("profile") or DEFAULT_PROFILE)
     browser_fallback = bool((cfg.get("keepalive") or {}).get("browser_fallback", False))
     browser_profile = str(cfg.get("browser_profile") or "").strip()
+    mt_flag = "present" if get_master_token_path(profile).is_file() else "absent"
 
     env, proxy_meta = build_proxy_env(cfg)
     env.pop("NOTEBOOKLM_DISABLE_KEEPALIVE_POKE", None)
 
-    # 阶段 1：纯 RotateCookies 无浏览器刷新（绝不传 --allow-headless）
+    # 阶段 1：纯 RotateCookies（若存在 master_token.json，notebooklm-py 0.8.6 会自动无浏览器重铸 Cookie；绝不传 --allow-headless）
     cmd1 = [str(nlm_bin), "--profile", profile, "auth", "refresh", "--verify", "--quiet"]
     try:
         p1 = subprocess.run(
@@ -95,11 +97,11 @@ def main(argv: list[str] | None = None) -> int:
             check=False,
         )
         if p1.returncode == 0:
-            _append_log(f"OK: auth refresh --verify succeeded (proxy={proxy_meta['source']})")
+            _append_log(f"OK: auth refresh --verify succeeded (proxy={proxy_meta['source']}, master_token={mt_flag})")
             write_auth_status(ok=True, state="ok", method="keepalive.refresh")
             return 0
         err1 = (p1.stderr or p1.stdout or f"exit={p1.returncode}").strip()[:240]
-        _append_log(f"WARN: auth refresh failed ({err1})")
+        _append_log(f"WARN: auth refresh failed (master_token={mt_flag}; {err1})")
     except subprocess.TimeoutExpired:
         _append_log("FAIL: auth refresh timed out after 120s")
         write_auth_status(ok=False, state="network_timeout", method="keepalive.refresh", error="timeout_120s")

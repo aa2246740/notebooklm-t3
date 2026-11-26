@@ -97,7 +97,13 @@ if rest[:2] == ["auth", "inspect"]:
     sys.exit(0)
 
 if rest and rest[0] == "login":
-    if storage.exists():
+    if "--master-token" in rest:
+        storage.parent.mkdir(parents=True, exist_ok=True)
+        storage.write_text(json.dumps({{"cookies": []}}), encoding="utf-8")
+        (storage.parent / "master_token.json").write_text(json.dumps({{"token": "mock"}}), encoding="utf-8")
+        print("Master-token login OK")
+        sys.exit(0)
+    if "--browser-cookies" in rest and storage.exists():
         ans = sys.stdin.readline().strip().lower()
         if ans != "y":
             print("Aborted: profile already has saved auth; not overwriting.")
@@ -333,6 +339,55 @@ class TestCommonAndNlm(unittest.TestCase):
             (self.home / ".local" / "state" / "notebooklm-t3" / "auth_status.json").read_text(encoding="utf-8")
         )
         self.assertEqual(status_doc["state"], "expired")
+
+    def test_login_auto_injects_system_chrome_browser(self) -> None:
+        # Auto-injects --browser chrome when system Chrome is available
+        p1 = self._run_nlm("login", extra_env={"NOTEBOOKLM_T3_SYSTEM_BROWSER": "chrome"})
+        self.assertEqual(p1.returncode, 0, p1.stderr)
+        calls = [json.loads(line)["argv"] for line in self.mock_log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(calls[-1], ["--profile", "default", "login", "--browser", "chrome"])
+
+        # Respects explicit --browser chromium without overriding
+        p2 = self._run_nlm("login", "--browser", "chromium", extra_env={"NOTEBOOKLM_T3_SYSTEM_BROWSER": "chrome"})
+        self.assertEqual(p2.returncode, 0, p2.stderr)
+        calls = [json.loads(line)["argv"] for line in self.mock_log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(calls[-1], ["--profile", "default", "login", "--browser", "chromium"])
+
+        # Does not inject --browser when no system browser is detected
+        p3 = self._run_nlm("login", extra_env={"NOTEBOOKLM_T3_SYSTEM_BROWSER": ""})
+        self.assertEqual(p3.returncode, 0, p3.stderr)
+        calls = [json.loads(line)["argv"] for line in self.mock_log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(calls[-1], ["--profile", "default", "login"])
+
+    def test_setup_auth_master_token_flow_and_status(self) -> None:
+        # Initially status reports master_token_present=False
+        st0 = json.loads(self._run_nlm("status", "--json").stdout)
+        self.assertFalse(st0["master_token_present"])
+
+        # Bootstrap master token reads account_email from 0600 config, never prints plaintext email, uses --browser chrome
+        p_mt = self._run_nlm(
+            "setup-auth", "master-token", "--json",
+            extra_env={"NOTEBOOKLM_T3_SYSTEM_BROWSER": "chrome"},
+        )
+        self.assertEqual(p_mt.returncode, 0, p_mt.stderr)
+        self.assertNotIn("alice@example.com", p_mt.stdout)
+        self.assertNotIn("alice@example.com", p_mt.stderr)
+        mt_out = json.loads(p_mt.stdout)
+        self.assertTrue(mt_out["ok"])
+        self.assertTrue(mt_out["master_token_present"])
+        self.assertEqual(mt_out["account_email_masked"], "a***@example.com")
+        self.assertEqual(mt_out["browser"], "chrome")
+
+        calls = [json.loads(line)["argv"] for line in self.mock_log.read_text(encoding="utf-8").splitlines()]
+        mt_call = next(c for c in calls if "--master-token" in c)
+        self.assertIn("--account", mt_call)
+        self.assertIn("alice@example.com", mt_call)
+        self.assertIn("--browser", mt_call)
+        self.assertIn("chrome", mt_call)
+
+        # Now status reports master_token_present=True
+        st1 = json.loads(self._run_nlm("status", "--json").stdout)
+        self.assertTrue(st1["master_token_present"])
 
 
 if __name__ == "__main__":

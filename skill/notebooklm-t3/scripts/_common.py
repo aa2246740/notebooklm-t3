@@ -16,7 +16,7 @@ from typing import Any
 
 SKILL_NAME = "notebooklm-t3"
 DEFAULT_PROFILE = "default"
-ENGINE_SPEC = "notebooklm-py[browser,mcp,markdown,impersonate,cookies]>=0.8.6,<0.9"
+ENGINE_SPEC = "notebooklm-py[browser,mcp,markdown,impersonate,cookies,headless]>=0.8.6,<0.9"
 ENGINE_MIN_VERSION = (0, 8, 6)
 ENGINE_MAX_EXCLUSIVE = (0, 9, 0)
 AUTH_STATUS_TTL_SECONDS = 45 * 60
@@ -279,6 +279,34 @@ def resolve_nlm_bin(config: dict[str, Any] | None = None) -> Path | None:
 
 def get_storage_state_path(profile: str = DEFAULT_PROFILE) -> Path:
     return get_home() / ".notebooklm" / "profiles" / profile / "storage_state.json"
+
+
+def get_master_token_path(profile: str = DEFAULT_PROFILE) -> Path:
+    return get_home() / ".notebooklm" / "profiles" / profile / "master_token.json"
+
+
+def detect_system_login_browser() -> str | None:
+    """探测本机已安装的系统浏览器（优先 Google Chrome，其次 Edge），避免无故下载 ~600MB Playwright Chromium。"""
+    override = os.environ.get("NOTEBOOKLM_T3_SYSTEM_BROWSER")
+    if override is not None:
+        val = override.strip().lower()
+        return val if val in ("chrome", "msedge") else None
+
+    chrome_paths = (
+        Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        Path.home() / "Applications" / "Google Chrome.app" / "Contents" / "MacOS" / "Google Chrome",
+    )
+    if any(p.is_file() for p in chrome_paths) or shutil.which("google-chrome") or shutil.which("google-chrome-stable"):
+        return "chrome"
+
+    edge_paths = (
+        Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+        Path.home() / "Applications" / "Microsoft Edge.app" / "Contents" / "MacOS" / "Microsoft Edge",
+    )
+    if any(p.is_file() for p in edge_paths) or shutil.which("microsoft-edge") or shutil.which("microsoft-edge-stable"):
+        return "msedge"
+
+    return None
 
 
 def _normalize_proxy_url(scheme: str, raw: str) -> str:

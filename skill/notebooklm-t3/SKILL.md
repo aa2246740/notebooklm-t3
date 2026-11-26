@@ -23,8 +23,11 @@ description: Operate Google NotebookLM (notebook.google.com) in T3 Code across A
 - 所有 CLI 操作必须经 `~/.agents/skills/notebooklm-t3/scripts/nlm` 执行：脚本通过 `uv` 托管 Python 运行，自动注入 `NOTEBOOKLM_DISABLE_KEEPALIVE_POKE=1` 与代理透传（含 `NO_PROXY`），按实时 `--help` 能力探测自动处理缺少 `--language` 的子命令，并在代码层硬拦截裸 `--browser-cookies`、非白名单 `--account`、`--allow-headless`、`language set` 与 `skill install`。严禁直接调 `python3 -m notebooklm` 或绕过 `nlm` 跑危险登录命令。
 - 后台定时保活每 20 分钟刷新一次会话并将状态写入 `~/.local/state/notebooklm-t3/auth_status.json`（超过 45 分钟视为 `unknown`）。开始任务前可先看 `~/.agents/skills/notebooklm-t3/scripts/nlm status --json`，若状态明确为 `expired` 或 `keychain_blocked` 则提前处理，不必等 RPC 报错。
 - 认证失效无感自愈（对用户透明，仅在彻底失败时开口）：一旦遇到 `AUTH_EXPIRED` / `Authentication expired or invalid` / `Token fetch failed`：
-  1. 静默执行 `~/.agents/skills/notebooklm-t3/scripts/nlm recover`（内部仅调用 `auth check` 与 `auth refresh`，绝不调用 `login`，避免串号与弹窗挂死）；若长驻 `notebooklm-mcp` 此前已缓存失效/旧客户端，当次剩余步骤自动改走 `nlm` CLI 完成。
-  2. 若 `nlm recover` 返回失败或 `keychain_blocked`，明确提醒用户在已绑定的浏览器 Profile 打开 `https://notebook.google.com/` 登录，再走前台三步绑定：`nlm setup-auth inspect --browser "<browser::profile>" --json` -> 让用户按脱敏序号确认 -> `nlm setup-auth apply --index <k>`（不要试图在 T3 共享浏览器里替 MCP 完成登录）。
+  1. 静默执行 `~/.agents/skills/notebooklm-t3/scripts/nlm recover`（内部仅调用 `auth check` 与 `auth refresh`，若本机已生成 `master_token.json` 则自动无浏览器重铸新 Cookie，绝不调用 `login`，避免串号与弹窗挂死）；若长驻 `notebooklm-mcp` 此前已缓存失效/旧客户端，当次剩余步骤自动改走 `nlm` CLI 完成。
+  2. 若 `nlm recover` 返回失败或 `keychain_blocked`，按以下优先级引导用户恢复，严禁给用户拼不带 `--browser chrome` 的裸 `notebooklm login`（会触发 ~600 MB 内置 Playwright Chromium 下载）：
+     - 首选（防休眠掉线）：让用户在终端前台执行一次 `~/.agents/skills/notebooklm-t3/scripts/nlm setup-auth master-token`（自动复用系统 Google Chrome 完成一次登录，生成持久 `master_token.json`，此后电脑过夜休眠醒来也能由后台保活与 `nlm recover` 静默无浏览器重铸 Cookie，不碰 macOS Keychain）。
+     - 备选 A（浏览器 Cookie 绑定）：让用户在已绑定的浏览器 Profile 打开 `https://notebook.google.com/` 登录，再走前台三步绑定：`nlm setup-auth inspect --browser "<browser::profile>" --json` -> 按脱敏序号确认 -> `nlm setup-auth apply --index <k>`。
+     - 备选 B（单次前台浏览器登录）：让用户在终端运行 `~/.agents/skills/notebooklm-t3/scripts/nlm login --browser chrome`（或 `notebooklm --profile default login --browser chrome`），明确复用系统 Chrome，不要试图在 T3 共享浏览器里替 MCP 完成登录。
 
 ## 3. 笔记本生命周期、用完即问与定期清理
 

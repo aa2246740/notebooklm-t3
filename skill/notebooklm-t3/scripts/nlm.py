@@ -35,8 +35,11 @@ from _common import (  # noqa: E402
     SETUP_CANDIDATES_TTL_SECONDS,
     atomic_write_json,
     build_proxy_env,
+    detect_system_login_browser,
     get_capabilities_cache_path,
     get_config_path,
+    get_home,
+    get_master_token_path,
     get_setup_candidates_path,
     get_storage_state_path,
     load_config,
@@ -200,6 +203,7 @@ def _cmd_status(args: list[str]) -> int:
         "proxy_has_socks": proxy_meta["has_socks"],
         "auth_status": auth_status,
         "storage_exists": get_storage_state_path(profile).exists(),
+        "master_token_present": get_master_token_path(profile).is_file(),
     }
     if as_json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
@@ -207,6 +211,7 @@ def _cmd_status(args: list[str]) -> int:
         print(f"profile: {data['profile']}")
         print(f"account: {data['account_email_masked'] or '(unbound)'}")
         print(f"browser_profile: {data['browser_profile'] or '(none)'}")
+        print(f"master_token: {'present' if data['master_token_present'] else 'absent'}")
         print(f"auth_status: {auth_status['state']} (stale={auth_status['stale']})")
         print(f"proxy_source: {proxy_meta['source']}")
     return 0
@@ -321,19 +326,62 @@ def _cmd_recover(extra_args: list[str]) -> int:
 
     write_auth_status(ok=False, state="expired", method="nlm.recover", error="manual_reauth_required")
     _eprint(
-        "[nlm] FAIL: automatic recovery did not succeed. Sign in to https://notebook.google.com/ "
-        "in your browser, then run foreground setup: nlm setup-auth inspect --browser <browser::profile>"
+        "[nlm] FAIL: automatic recovery did not succeed. For sleep-proof auth, run in terminal: "
+        "nlm setup-auth master-token (or re-bind Chrome cookies via nlm setup-auth inspect --browser <browser::profile>, "
+        "or foreground login with: nlm login --browser chrome)."
     )
     return 1
 
 
+def _resolve_saved_account_email(cfg: dict[str, Any], profile: str) -> str:
+    """从 0600 本地配置或 profile account.json 解析明文邮箱（仅用于本机命令传参，绝不打印）。"""
+    email = str(cfg.get("account_email") or "").strip()
+    if email:
+        return email
+    acct_file = get_home() / ".notebooklm" / "profiles" / profile / "account.json"
+    acct_doc = load_json_file(acct_file, default=None)
+    if isinstance(acct_doc, dict):
+        cand = str(acct_doc.get("email") or acct_doc.get("account_email") or "").strip()
+        if cand:
+            return cand
+    return ""
+
+
+def _engine_has_gpsoauth(nlm_bin: Path) -> bool:
+    """检查 notebooklm-py 专属 Python 环境是否已装 gpsoauth（[headless] extra）。"""
+    try:
+        first_line = nlm_bin.read_text(encoding="utf-8", errors="ignore").splitlines()[0]
+    except (OSError, IndexError):
+        return True
+    if not first_line.startswith("#!"):
+        return True
+    shebang = first_line[2:].strip().split()
+    if not shebang:
+        return True
+    py_bin = Path(shebang[0])
+    if not py_bin.is_file() or py_bin.name == "env":
+        return True
+    try:
+        proc = subprocess.run(
+            [str(py_bin), "-c", "import gpsoauth"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        return proc.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return True
+
+
 def _cmd_setup_auth(args: list[str]) -> int:
-    """前台三步白名单账号绑定：inspect（脱敏建表） -> 用户选号 -> apply（安全带确认写盘）。"""
+    """前台白名单账号绑定：inspect/apply（浏览器 Cookie）或 master-token（长期持久令牌）。"""
     if not args or args[0] in ("-h", "--help"):
         print(
             "Usage:\n"
             "  nlm setup-auth inspect --browser <chrome::Profile N> [--json]\n"
-            "  nlm setup-auth apply --index <N> [--confirm-overwrite] [--json]"
+            "  nlm setup-auth apply --index <N> [--confirm-overwrite] [--json]\n"
+            "  nlm setup-auth master-token [--browser chrome|msedge|chromium] [--cdp-url <url>] [--force] [--json]"
         )
         return 0
 
@@ -636,7 +684,146 @@ def _cmd_setup_auth(args: list[str]) -> int:
             print(f"OK: bound profile '{profile}' -> {result['account_email_masked']} ({target_bp})")
         return 0
 
-    _eprint(f"ERROR: unknown setup-auth subcommand '{sub}'. Expected 'inspect' or 'apply'.")
+    if sub == "master-token":
+        browser_choice = ""
+        cdp_url = ""
+        explicit_email = ""
+        force_overwrite = False
+        i = 0
+        while i < len(rest):
+            tok = rest[i]
+            if tok == "--browser" and i + 1 < len(rest):
+                browser_choice = rest[i + 1].strip()
+                i += 2
+            elif tok.startswith("--browser="):
+                browser_choice = tok.split("=", 1)[1].strip()
+                i += 1
+            elif tok == "--cdp-url" and i + 1 < len(rest):
+                cdp_url = rest[i + 1].strip()
+                i += 2
+            elif tok.startswith("--cdp-url="):
+                cdp_url = tok.split("=", 1)[1].strip()
+                i += 1
+            elif tok == "--email" and i + 1 < len(rest):
+                explicit_email = rest[i + 1].strip()
+                i += 2
+            elif tok.startswith("--email="):
+                explicit_email = tok.split("=", 1)[1].strip()
+                i += 1
+            elif tok == "--force":
+                force_overwrite = True
+                i += 1
+            else:
+                i += 1
+
+        if not _engine_has_gpsoauth(nlm_bin):
+            msg = (
+                "Engine venv is missing 'gpsoauth' (notebooklm-py[headless] extra). "
+                "Re-run installer with --force-engine to install it."
+            )
+            out = {"ok": False, "error": "missing_headless_extra", "message": msg}
+            print(json.dumps(out, ensure_ascii=False, indent=2) if as_json else f"ERROR: {msg}")
+            return 2
+
+        target_email = explicit_email or _resolve_saved_account_email(cfg, profile)
+        if not target_email:
+            msg = (
+                "No bound account email found in config.json or profile metadata. "
+                "Pass --email <your-google-email> in terminal, or bind via 'nlm setup-auth inspect' first."
+            )
+            out = {"ok": False, "error": "missing_account_email", "message": msg}
+            print(json.dumps(out, ensure_ascii=False, indent=2) if as_json else f"ERROR: {msg}")
+            return 2
+
+        chosen_browser = browser_choice or detect_system_login_browser() or "chrome"
+        login_cmd = [
+            str(nlm_bin),
+            "--profile",
+            profile,
+            "login",
+            "--master-token",
+            "--account",
+            target_email,
+        ]
+        if cdp_url:
+            login_cmd.extend(["--cdp-url", cdp_url])
+        else:
+            login_cmd.extend(["--browser", chosen_browser])
+        if force_overwrite:
+            login_cmd.append("--force")
+
+        _eprint(
+            f"[nlm] Bootstrapping durable master token for {mask_email(target_email)} "
+            f"(browser={chosen_browser if not cdp_url else 'cdp'}, timeout=300s)..."
+        )
+        try:
+            proc = subprocess.run(
+                login_cmd,
+                env=env,
+                stdout=sys.stderr if as_json else None,
+                timeout=320,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            write_auth_status(
+                ok=False,
+                state="network_timeout",
+                method="nlm.setup_auth.master_token",
+                error="timeout_320s",
+            )
+            msg = "Master-token login timed out after 320s."
+            print(json.dumps({"ok": False, "error": "timeout", "message": msg}, ensure_ascii=False) if as_json else f"ERROR: {msg}")
+            return 3
+
+        if proc.returncode != 0:
+            msg = f"Master-token login failed (exit {proc.returncode})."
+            out = {"ok": False, "error": "master_token_login_failed", "exit_code": proc.returncode, "message": msg}
+            print(json.dumps(out, ensure_ascii=False, indent=2) if as_json else f"ERROR: {msg}")
+            return proc.returncode
+
+        mt_path = get_master_token_path(profile)
+        verify_env = dict(env)
+        verify_env["NOTEBOOKLM_DISABLE_KEEPALIVE_POKE"] = "1"
+        verify_proc = subprocess.run(
+            [str(nlm_bin), "--profile", profile, "auth", "check", "--test", "--passive"],
+            env=verify_env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if not mt_path.is_file() or verify_proc.returncode != 0:
+            write_auth_status(
+                ok=False,
+                state="expired",
+                method="nlm.setup_auth.master_token",
+                error="verify_failed",
+            )
+            msg = "Master token file missing or post-login auth check failed."
+            print(json.dumps({"ok": False, "error": "verify_failed", "message": msg}, ensure_ascii=False) if as_json else f"ERROR: {msg}")
+            return 1
+
+        cfg["profile"] = profile
+        cfg["account_email"] = target_email
+        save_config(cfg)
+        write_auth_status(ok=True, state="ok", method="nlm.setup_auth.master_token")
+        result = {
+            "ok": True,
+            "profile": profile,
+            "account_email_masked": mask_email(target_email),
+            "master_token_present": True,
+            "browser": chosen_browser if not cdp_url else "cdp",
+        }
+        if as_json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(
+                f"OK: durable master token saved for '{profile}' ({result['account_email_masked']}). "
+                "Keepalive and nlm recover can now re-mint cookies silently even after sleep."
+            )
+        return 0
+
+    _eprint(f"ERROR: unknown setup-auth subcommand '{sub}'. Expected 'inspect', 'apply', or 'master-token'.")
     return 2
 
 
@@ -804,6 +991,32 @@ def _check_guardrails(args: list[str], sub1: str, sub2: str) -> int | None:
     return None
 
 
+def _inject_default_login_browser(args: list[str], sub1: str) -> list[str]:
+    """当执行 `nlm login` 且未显式指定 --browser / --browser-cookies 时，自动复用本机 Chrome/Edge 避免下载 ~600MB 内置 Chromium。"""
+    if sub1 != "login":
+        return args
+    skip_flags = {
+        "-h",
+        "--help",
+        "--browser",
+        "--browser-cookies",
+        "--master-token-refresh",
+        "--oauth-token",
+        "--cdp-url",
+    }
+    for tok in args:
+        if tok in skip_flags or any(tok.startswith(f + "=") for f in skip_flags if f.startswith("--")):
+            return args
+    sys_browser = detect_system_login_browser()
+    if not sys_browser:
+        return args
+    _eprint(
+        f"[nlm] Auto-selected system browser (--browser {sys_browser}) "
+        "to avoid downloading ~600MB bundled Playwright Chromium."
+    )
+    return [*args, "--browser", sys_browser]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
@@ -839,7 +1052,7 @@ def main(argv: list[str] | None = None) -> int:
     env, _ = build_proxy_env(cfg)
     env.setdefault("NOTEBOOKLM_DISABLE_KEEPALIVE_POKE", "1")
 
-    forwarded = list(args)
+    forwarded = _inject_default_login_browser(list(args), sub1)
     has_lang_flag = any(a == "--language" or a.startswith("--language=") for a in forwarded)
     if sub1 == "generate" and sub2 and has_lang_flag:
         if not _supports_generate_language(nlm_bin, sub2, env):
